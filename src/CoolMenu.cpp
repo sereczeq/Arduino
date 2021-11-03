@@ -179,6 +179,21 @@ bool red()
 
 String selector = "->";
 
+class lcdManager
+{
+public:
+    static void display(String parent, String child)
+    {
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print(parent);
+        lcd.setCursor(0, 1);
+        lcd.println(selector);
+        lcd.setCursor(3, 1);
+        lcd.print(child);
+    }
+};
+
 //region Defining MenuWithOptions class
 struct MenuWithOptions
 {
@@ -247,6 +262,7 @@ public:
         setCurrentIndex(currentIndex + childReturned);
         if (childReturned == 1)
         {
+            lcdManager::display(name, children[currentIndex].name);
             Serial.println(name + " " + selector + " " + children[currentIndex].name);
         }
 //        Serial.println(name + " is at index " + currentIndex);
@@ -266,6 +282,7 @@ public:
         setCurrentIndex(currentIndex + childReturned);
         if (childReturned == -1)
         {
+            lcdManager::display(name, children[currentIndex].name);
             Serial.println(name + " " + selector + " " + children[currentIndex].name);
         }
         return 0;
@@ -301,7 +318,8 @@ public:
         hasSubMenuOpened = true;
         Serial.println(name + "'s hasSubMenuOpened is set to " + checkint++);
         Serial.println("Entered a child");
-        Serial.println(name);
+        lcdManager::display(name, children[currentIndex].name);
+        Serial.println(name + " " + selector + " " + children[currentIndex].name);
         return getNames();
     }
 
@@ -323,7 +341,8 @@ public:
                 hasSubMenuOpened = false;
                 return &name;
             }
-            Serial.println(name);
+            lcdManager::display(name, children[currentIndex].name);
+            Serial.println(name + " " + selector +  " " + children[currentIndex].name);
             return &name;
         }
 
