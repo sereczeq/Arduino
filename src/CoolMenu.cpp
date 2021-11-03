@@ -17,6 +17,7 @@ void initLCD()
     lcd.clear();
     lcd.backlight();
 }
+
 #define BUTTON_RED 2
 #define BUTTON_GREEN 4
 
@@ -48,7 +49,6 @@ void initEncoder()
     pinMode(ENCODER_A, INPUT_PULLUP);
     pinMode(ENCODER_B, INPUT_PULLUP);
 }
-
 
 
 void initLED()
@@ -108,6 +108,76 @@ bool buttonPressedThisFrame(int pin)
 }
 //endregion
 
+//region old working buttons
+
+bool wasRedPressed = false;
+bool wasGreenPressed = false;
+bool redLock = false;
+bool greenLock = false;
+unsigned long redPressedTime = 0;
+unsigned long greenPressedTime = 0;
+unsigned long debounceDelay = 50;
+
+bool greenPressed()
+{
+    bool greenPressed = digitalRead(BUTTON_GREEN) == LOW;
+    if (greenPressed != wasGreenPressed)
+    {
+        greenPressedTime = millis();
+    }
+    wasGreenPressed = greenPressed;
+    if (millis() - greenPressedTime > debounceDelay)
+    {
+        if (wasGreenPressed) return true;
+    }
+
+    return false;
+}
+
+bool green()
+{
+    bool pressed = greenPressed();
+    if (!greenLock && pressed)
+    {
+        greenLock = true;
+        return true;
+    }
+    greenLock = pressed;
+    return false;
+}
+
+bool redPressed()
+{
+    bool redPressed = digitalRead(BUTTON_RED) == LOW;
+    if (redPressed != wasRedPressed)
+    {
+        redPressedTime = millis();
+    }
+    wasRedPressed = redPressed;
+    if (millis() - redPressedTime > debounceDelay)
+    {
+
+        if (wasRedPressed) return true;
+    }
+    return false;
+}
+
+bool red()
+{
+    bool pressed = redPressed();
+    if (!redLock && pressed)
+    {
+        redLock = true;
+        return true;
+    }
+    redLock = pressed;
+    return false;
+}
+
+//endregion
+
+
+String selector = "->";
 
 //region Defining MenuWithOptions class
 struct MenuWithOptions
@@ -115,19 +185,20 @@ struct MenuWithOptions
     MenuWithOptions(const String &optionName, int subMenusSize, MenuWithOptions *subMenus) : name(optionName),
                                                                                              children(subMenus),
                                                                                              size(subMenusSize)
-    {}
+    { Serial.println("Calling constructor of " + name); }
 
     MenuWithOptions(const String &name, void (*func)()) : name(name), func(func)
-    {}
+    { Serial.println("Calling constructor of " + name); }
 
     MenuWithOptions()
-    {}
+    { Serial.println("Calling constructor of " + name); }
 
 private:
     String name;
     MenuWithOptions *children;
-    int size;
+    int size = 0;
     int currentIndex{};
+    int checkint = 1;
 
     void (*func)(){};
 
@@ -145,6 +216,7 @@ private:
 
     bool hasChildren() const
     {
+        Serial.println(name + "size is " + size);
         return size > 0;
     }
 
@@ -170,8 +242,14 @@ public:
             return 1;
         }
         // Change menus index by recursively returned amount, if child changed indexes of its children, don't change indexes
-        setCurrentIndex(currentIndex + children[currentIndex].nextIndex());
-        Serial.println(name);
+
+        int childReturned = children[currentIndex].nextIndex();
+        setCurrentIndex(currentIndex + childReturned);
+        if (childReturned == 1)
+        {
+            Serial.println(name + " " + selector + " " + children[currentIndex].name);
+        }
+//        Serial.println(name + " is at index " + currentIndex);
         return 0;
     }
 
@@ -184,28 +262,35 @@ public:
             return -1;
         }
         // Change menus index by recursively returned amount, if child changed indexes of its children, don't change indexes
-        setCurrentIndex(currentIndex + children[currentIndex].previousIndex());
-        Serial.println(name);
+        int childReturned = children[currentIndex].previousIndex();
+        setCurrentIndex(currentIndex + childReturned);
+        if (childReturned == -1)
+        {
+            Serial.println(name + " " + selector + " " + children[currentIndex].name);
+        }
         return 0;
     }
 
     /// enter sub menu - Changes display (title and sub options) or executes the chosen option. Recursively calls enter sub menu, until called menu doesn't have children, execute() is called.
     String *enterSubMenu()
     {
+        Serial.println("Enter " + name);
         // If menu doesn't have children, and enter sub menu was called on it, that means it's the last in the chain, and should execute its method
         // Returns null pointer so parent can properly return getNames()
         if (!hasChildren())
         {
+            Serial.println("Running function");
             func();
             return nullptr;
         }
 
-        MenuWithOptions currentChild = children[currentIndex];
         // If menu has opened child, call enter sub menu on the child.
         // If the child returned null, meaning it doesn't have children (so doesn't have names to display), display names
+        Serial.println(name + "'s hasSubMenuOpened is set to " + hasSubMenuOpened);
         if (hasSubMenuOpened)
         {
-            String *names = currentChild.enterSubMenu();
+            Serial.println(name + " has children opened, passing through");
+            String *names = children[currentIndex].enterSubMenu();
             if (names == nullptr)
             {
                 return getNames();
@@ -214,26 +299,56 @@ public:
         }
         // If menu doesn't have opened children, but has children, open sub menu (change the bool) and display names
         hasSubMenuOpened = true;
+        Serial.println(name + "'s hasSubMenuOpened is set to " + checkint++);
+        Serial.println("Entered a child");
+        Serial.println(name);
         return getNames();
     }
 
     String *exitSubMenu()
     {
-        // Can do that without checking whether menu has children. Method will never get called for menu not having children
-        MenuWithOptions currentChild = children[currentIndex];
-        if (hasSubMenuOpened)
+        Serial.println("Exiting sub menu " + name);
+        if (!hasChildren())
         {
-            String *childName = currentChild.exitSubMenu();
-            if (childName == nullptr)
-            {
-                return getNames();
-            }
-
-            return childName;
+            Serial.println(name + " returning null");
+            return nullptr;
         }
 
-        hasSubMenuOpened = false;
+        if (hasSubMenuOpened)
+        {
+            String *childName = children[currentIndex].exitSubMenu();
+            if (childName == nullptr)
+            {
+                Serial.println(name + " setting to false");
+                hasSubMenuOpened = false;
+                return &name;
+            }
+            Serial.println(name);
+            return &name;
+        }
+
         return nullptr;
+
+        // Can do that without checking whether menu has children. Method will never get called for menu not having children
+
+//        if (hasSubMenuOpened)
+//        {
+//            String *childName = children[currentIndex].exitSubMenu();
+//            if (childName == nullptr)
+//            {
+//                hasSubMenuOpened = false;
+//                return getNames();
+//            }
+//
+//            if(!children[currentIndex].hasChildren())
+//            {
+//                hasSubMenuOpened = false;
+//                return nullptr;
+//            }
+//
+//            return childName;
+//        }
+//        return nullptr;
     }
 };
 //endregion
@@ -259,35 +374,40 @@ void ledOff()
 void RedLed()
 {
     int value = ledPower[0];
-    if(buttonPressedThisFrame(BUTTON_GREEN))
+    while (greenPressed())
     {
         value++;
-        if(value > 255) value -= 255;
+        if (value > 255) value -= 255;
+        ledPower[0] = value;
+        Serial.println(value);
+        analogWrite(LED_RED, value);
     }
-    ledPower[0] = value;
-    analogWrite(LED_RED, value);
 }
+
 void GreenLed()
 {
     int value = ledPower[1];
-    if(buttonPressedThisFrame(BUTTON_GREEN))
+    while (greenPressed())
     {
         value++;
-        if(value > 255) value -= 255;
+        if (value > 255) value -= 255;
+        ledPower[1] = value;
+        Serial.println(value);
+        analogWrite(LED_GREEN, value);
     }
-    ledPower[1] = value;
-    analogWrite(LED_GREEN, value);
 }
+
 void BlueLed()
 {
     int value = ledPower[2];
-    if(buttonPressedThisFrame(BUTTON_GREEN))
+    while (greenPressed())
     {
         value++;
-        if(value > 255) value -= 255;
+        if (value > 255) value -= 255;
+        ledPower[2] = value;
+        Serial.println(value);
+        analogWrite(LED_BLUE, value);
     }
-    ledPower[2] = value;
-    analogWrite(LED_BLUE, value);
 }
 
 void backLightOn()
@@ -307,7 +427,7 @@ String currentTemperatureFormat = celcius;
 // (X°C × 9/5) + 32 = Y°F
 float calculateTemperature(float temperature)
 {
-    if(currentTemperatureFormat == celcius) return temperature;
+    if (currentTemperatureFormat == celcius) return temperature;
     return temperature * 9 / 5 + 32;
 }
 
@@ -316,18 +436,36 @@ void temperatureIn()
     float temperature = calculateTemperature(100);
     Serial.println(temperature);
 }
+
 void temperatureOut()
 {
     float temperature = calculateTemperature(18);
     Serial.println(temperature);
 }
+
 void changeTemperatureFormatToCelcius()
 {
     currentTemperatureFormat = celcius;
 }
+
 void changeTemperatureFormatToFarenheit()
 {
     currentTemperatureFormat = farenheit;
+}
+
+void changeSelectorToArrow()
+{
+    selector = "->";
+}
+
+void changeSelectorToDash()
+{
+    selector = "-";
+}
+
+void printAbout()
+{
+    Serial.println("Made by Jakub Seredyński");
 }
 
 void empty()
@@ -386,8 +524,8 @@ void initMainMenu()
                                                                        {"Off", backLightOff}}},
                                                        {"Selector",  3,
                                                                new (MenuWithOptions[3]) {
-                                                                       {">",             empty},
-                                                                       {"-",             empty},
+                                                                       {">",             changeSelectorToArrow},
+                                                                       {"-",             changeSelectorToDash},
                                                                        {"<custom char>", empty}
                                                                }}
                                                }},
@@ -401,7 +539,7 @@ void initMainMenu()
                                                                        {"F", changeTemperatureFormatToFarenheit}
                                                                }}
                                                }},
-                                       {"About",       empty}
+                                       {"About",       printAbout}
                                });
     mainMenu.enterSubMenu();
 }
@@ -409,7 +547,7 @@ void initMainMenu()
 
 void setup()
 {
-//    initLCD();
+    initLCD();
     initButtons();
     initRGB();
     initEncoder();
@@ -417,34 +555,8 @@ void setup()
     Serial.begin(9600);
     setupPCI();
     initMainMenu();
-
-//    mainMenu = MenuWithOptions("Main Menu", 4,
-//                               (MenuWithOptions[])
-//                                       {{"LED Options", 4,
-//                                                (MenuWithOptions[]) {
-//                                                        {"Power", 2, (MenuWithOptions[]) {{"On",  ledOn},
-//                                                                                          {"Off", ledOff}}},
-//                                                        {"Red",   empty},
-//                                                        {"Green", empty},
-//                                                        {"Blue",  empty}
-//                                                }},
-//                                        {"Display",     2,
-//                                                (MenuWithOptions[]) {
-//                                                        {"Backlight", 2, (MenuWithOptions[]) {{"On",  empty},
-//                                                                                              {"Off", empty}}},
-//                                                        {"Selector",  3, (MenuWithOptions[]) {{">",             empty},
-//                                                                                              {"-",             empty},
-//                                                                                              {"<custom char>", empty}}}
-//                                                }},
-//                                        {"Temperature", 3,
-//                                                (MenuWithOptions[]) {
-//                                                        {"Sensor IN",  empty},
-//                                                        {"Sensor OUT", empty},
-//                                                        {"Units",      2, (MenuWithOptions[]) {{"C", empty},
-//                                                                                               {"F", empty}}}
-//                                                }},
-//                                        {"About",       empty}});
 }
+
 
 void loop()
 {
@@ -460,10 +572,10 @@ void loop()
     {
         mainMenu.previousIndex();
     }
-    if (buttonPressed(BUTTON_GREEN))
+    if (green())
     {
         mainMenu.enterSubMenu();
-    } else if (buttonPressed(BUTTON_RED))
+    } else if (red())
     {
         mainMenu.exitSubMenu();
     }
