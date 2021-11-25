@@ -30,6 +30,6 @@ add_custom_target(
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-add_executable(Z_DUMMY_TARGET ${SRC_LIST} src/stopwatch.cpp src/colourMixer.cpp src/voltage.cpp src/uartTerminal.cpp src/CoolMenu.cpp)
+add_executable(Z_DUMMY_TARGET ${SRC_LIST} src/stopwatch.cpp src/colourMixer.cpp src/voltage.cpp src/uartTerminal.cpp src/CoolMenu.cpp src/SerialCommands.cpp src/weatherStation.cpp src/test.cpp)
 
 link_directories (D/Arduino/libraries)
